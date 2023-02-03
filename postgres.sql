@@ -322,6 +322,9 @@ pg_dump -U username -h hostname databasename > dump.sql
 ## Import dump into existing database
 psql -d newdb -f dump.sql
 
+## Export query results as tsv
+psql -U [username] -F'\t' --no-align -f query.sql -o results.tsv
+
 -- Connect to a specific database:
 \c database_name;
 
