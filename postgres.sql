@@ -221,7 +221,8 @@ ORDER BY last_autovacuum desc;
 
 -- CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 -- CREATE EXTENSION IF NOT EXISTS pg_stat_monitor;
--- GRANT ALL ON FUNCTION pg_stat_statements_reset(oid, oid, bigint) TO youruser;
+-- GRANT EXECUTE ON FUNCTION pg_stat_statements_reset(oid, oid, bigint) TO youruser;
+-- GRANT EXECUTE ON FUNCTION SELECT pg_stat_reset() TO youruser;
 
 -- Flush statistics
 SELECT pg_stat_statements_reset();
