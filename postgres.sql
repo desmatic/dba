@@ -41,27 +41,6 @@ ORDER BY number_of_occurences DESC;
 -- List all activity
 SELECT * FROM pg_stat_activity;
 
--- Show current configuration
-SHOW ALL;
-
--- Show file configuration
-SELECT * FROM pg_file_settings;
-
--- Show max connections
-SHOW max_connections;
-
--- Show shared buffers 25%
-SHOW shared_buffers;
-
--- Show temp buffers for sessions
-SHOW temp_buffers;
-
--- Show working memory for queries
-SHOW work_mem;
-
--- Show working memory for maintenance queries
-SHOW maintenance_work_mem;
-
 -- Queries per second
 SELECT sum(numbackends) AS active_connections,
        sum(xact_commit) AS transactions,
@@ -77,52 +56,6 @@ SELECT sum(numbackends) AS active_connections,
        (sum(tup_returned) + sum(tup_fetched) + sum(tup_inserted) + sum(tup_updated) + sum(tup_deleted)) / extract(epoch from now() - pg_postmaster_start_time()) AS queries_per_second
 FROM pg_stat_database;
 
--- List schemas
-SELECT schema_name FROM information_schema.schemata;
-
--- Kill running query
-SELECT pg_cancel_backend(procpid);
-
--- Kill idle query
-SELECT pg_terminate_backend(procpid);
-
--- Vacuum command
-VACUUM (VERBOSE, ANALYZE);
-
--- Describe table
-SELECT
-   table_name, 
-   column_name, 
-   data_type 
-FROM 
-   information_schema.columns
-WHERE table_name = '_cs_incident';
-
--- All database users
-select * from pg_stat_activity where current_query not like '<%';
-
--- All databases and their sizes
-select * from pg_user;
-
--- All tables and their size
-SELECT
-  schema_name,
-  relname,
-  pg_size_pretty(table_size) AS size,
-  table_size
-
-FROM (
-       SELECT
-         pg_catalog.pg_namespace.nspname           AS schema_name,
-         relname,
-         pg_relation_size(pg_catalog.pg_class.oid) AS table_size
-
-       FROM pg_catalog.pg_class
-         JOIN pg_catalog.pg_namespace ON relnamespace = pg_catalog.pg_namespace.oid
-     ) t
-WHERE schema_name NOT LIKE 'pg_%'
-ORDER BY table_size DESC;
-
 -- cache hit rates (should not be less than 0.99)
 SELECT sum(heap_blks_read) as heap_read, sum(heap_blks_hit)  as heap_hit, (sum(heap_blks_hit) - sum(heap_blks_read)) / sum(heap_blks_hit) as ratio
 FROM pg_statio_user_tables;
@@ -136,16 +69,6 @@ ORDER BY n_live_tup DESC;
 SELECT sum(idx_blks_read) as idx_read, sum(idx_blks_hit)  as idx_hit, (sum(idx_blks_hit) - sum(idx_blks_read)) / sum(idx_blks_hit) as ratio
 FROM pg_statio_user_indexes;
 
--- Size of table on disk
-SELECT nspname || '.' || relname AS "relation",
-   pg_size_pretty(pg_total_relation_size(C.oid)) AS "total_size"
- FROM pg_class C
- LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
- WHERE nspname NOT IN ('pg_catalog', 'information_schema')
-   AND C.relkind <> 'i'
-   AND nspname !~ '^pg_toast'
- ORDER BY pg_total_relation_size(C.oid) DESC;
- 
 -- Locks
  SELECT t.relname, l.locktype, page, virtualtransaction, pid, mode, granted 
 FROM pg_locks l, pg_stat_all_tables t 
@@ -183,35 +106,6 @@ JOIN pg_catalog.pg_locks         blocking_locks
 JOIN pg_catalog.pg_stat_activity blocking_activity ON blocking_activity.pid = blocking_locks.pid
 WHERE NOT blocked_locks.GRANTED;
 
--- List all indexes
-SELECT
-    schemaname AS schemaname,
-    t.relname AS tablename,
-    ix.relname AS indexname,
-    regexp_replace(pg_get_indexdef(i.indexrelid), '^[^\(]*\((.*)\)$', '\1') AS columns,
-    regexp_replace(pg_get_indexdef(i.indexrelid), '.* USING ([^ ]*) \(.*', '\1') AS algorithm,
-    indisunique AS UNIQUE,
-    indisprimary AS PRIMARY,
-    indisvalid AS valid,
-    pg_size_pretty(pg_relation_size(i.indexrelid)) AS size,
-    idx_scan AS indexscans,
-    idx_tup_read AS tuplereads,
-    idx_tup_fetch AS tuplefetches,
-    pg_get_indexdef(i.indexrelid) AS definition
-FROM
-    pg_index i
-    INNER JOIN pg_class t ON t.oid = i.indrelid
-    INNER JOIN pg_class ix ON ix.oid = i.indexrelid
-    LEFT JOIN pg_stat_user_indexes ui ON ui.indexrelid = i.indexrelid
-WHERE
-    schemaname IS NOT NULL
-ORDER BY
-    schemaname ASC,
-    tablename ASC,
-    indexname ASC;
-
-SELECT * FROM pg_stat_user_indexes;
-
 -- find tables with missing indexes
 SELECT
     relname as table,
@@ -248,6 +142,175 @@ WHERE
 ORDER BY
     pg_relation_size(i.indexrelid) DESC,
     relname ASC;
+
+-- All tables and their size
+SELECT
+  schema_name,
+  relname,
+  pg_size_pretty(table_size) AS size,
+  table_size
+
+FROM (
+       SELECT
+         pg_catalog.pg_namespace.nspname           AS schema_name,
+         relname,
+         pg_relation_size(pg_catalog.pg_class.oid) AS table_size
+
+       FROM pg_catalog.pg_class
+         JOIN pg_catalog.pg_namespace ON relnamespace = pg_catalog.pg_namespace.oid
+     ) t
+WHERE schema_name NOT LIKE 'pg_%'
+ORDER BY table_size DESC;
+
+-- Size of table on disk
+SELECT nspname || '.' || relname AS "relation",
+   pg_size_pretty(pg_total_relation_size(C.oid)) AS "total_size"
+ FROM pg_class C
+ LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
+ WHERE nspname NOT IN ('pg_catalog', 'information_schema')
+   AND C.relkind <> 'i'
+   AND nspname !~ '^pg_toast'
+ ORDER BY pg_total_relation_size(C.oid) DESC;
+ 
+-- List all indexes
+SELECT
+    schemaname AS schemaname,
+    t.relname AS tablename,
+    ix.relname AS indexname,
+    regexp_replace(pg_get_indexdef(i.indexrelid), '^[^\(]*\((.*)\)$', '\1') AS columns,
+    regexp_replace(pg_get_indexdef(i.indexrelid), '.* USING ([^ ]*) \(.*', '\1') AS algorithm,
+    indisunique AS UNIQUE,
+    indisprimary AS PRIMARY,
+    indisvalid AS valid,
+    pg_size_pretty(pg_relation_size(i.indexrelid)) AS size,
+    idx_scan AS indexscans,
+    idx_tup_read AS tuplereads,
+    idx_tup_fetch AS tuplefetches,
+    pg_get_indexdef(i.indexrelid) AS definition
+FROM
+    pg_index i
+    INNER JOIN pg_class t ON t.oid = i.indrelid
+    INNER JOIN pg_class ix ON ix.oid = i.indexrelid
+    LEFT JOIN pg_stat_user_indexes ui ON ui.indexrelid = i.indexrelid
+WHERE
+    schemaname IS NOT NULL
+ORDER BY
+    schemaname ASC,
+    tablename ASC,
+    indexname ASC;
+
+SELECT * FROM pg_stat_user_indexes;
+
+-- View number of dead tuples
+SELECT
+    relname AS TableName,
+    n_live_tup AS LiveTuples,
+    n_dead_tup AS DeadTuples,
+    last_autovacuum AS Autovacuum,
+    last_autoanalyze AS Autoanalyze
+FROM pg_stat_user_tables
+order by n_dead_tup desc;
+
+-- Last time autovacuum ran
+SELECT 
+    relname, 
+    last_autovacuum,
+    last_autoanalyze
+FROM pg_stat_user_tables
+ORDER BY last_autovacuum desc;
+
+-- CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+-- CREATE EXTENSION IF NOT EXISTS pg_stat_monitor;
+-- GRANT ALL ON FUNCTION pg_stat_statements_reset(oid, oid, bigint) TO youruser;
+
+-- Flush statistics
+SELECT pg_stat_statements_reset();
+
+-- Top queries
+SELECT
+	userid::regrole, 
+	dbid, 
+	SUM(calls) AS total,
+	query
+FROM pg_stat_statements
+GROUP BY userid::regrole, dbid, query
+ORDER BY 3 DESC
+LIMIT 10;
+
+-- Top CPU queries
+SELECT
+	userid::regrole,
+	dbid,
+	query
+FROM pg_stat_statements
+ORDER BY mean_time DESC
+LIMIT 10;
+
+-- Top IO queries
+SELECT
+	userid::regrole, 
+	dbid, 
+	query
+FROM pg_stat_statements
+ORDER BY (blk_read_time+blk_write_time)/calls DESC
+LIMIT 10;
+
+-- Top memory queries
+SELECT
+	userid::regrole, 
+	dbid, 
+	query
+FROM pg_stat_statements
+ORDER BY (shared_blks_hit+shared_blks_dirtied) DESC
+LIMIT 10;
+
+-- Show current configuration
+SHOW ALL;
+
+-- Show file configuration
+SELECT * FROM pg_file_settings;
+
+-- Show max connections
+SHOW max_connections;
+
+-- Show shared buffers 25%
+SHOW shared_buffers;
+
+-- Show temp buffers for sessions
+SHOW temp_buffers;
+
+-- Show working memory for queries
+SHOW work_mem;
+
+-- Show working memory for maintenance queries
+SHOW maintenance_work_mem;
+
+-- List schemas
+SELECT schema_name FROM information_schema.schemata;
+
+-- Kill running query
+SELECT pg_cancel_backend(procpid);
+
+-- Kill idle query
+SELECT pg_terminate_backend(procpid);
+
+-- Vacuum command
+VACUUM (VERBOSE, ANALYZE);
+
+-- Describe table
+SELECT
+   table_name, 
+   column_name, 
+   data_type 
+FROM 
+   information_schema.columns
+WHERE table_name = '_cs_incident';
+
+-- All database users
+select * from pg_stat_activity where current_query not like '<%';
+
+-- All databases and their sizes
+select * from pg_user;
 
 ## access the PostgreSQL database server:
 psql -U [username]
@@ -332,72 +395,9 @@ SET ROLE new_role;
 -- Allow role_1 to set its role as role_2:
 GRANT role_2 TO role_1;
 
--- View number of dead tuples
-SELECT
-    relname AS TableName,
-    n_live_tup AS LiveTuples,
-    n_dead_tup AS DeadTuples,
-    last_autovacuum AS Autovacuum,
-    last_autoanalyze AS Autoanalyze
-FROM pg_stat_user_tables
-order by n_dead_tup desc;
-
--- Last time autovacuum ran
-SELECT 
-    relname, 
-    last_autovacuum,
-    last_autoanalyze
-FROM pg_stat_user_tables
-ORDER BY last_autovacuum desc;
-
 -- Drop all tables in public schema
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 GRANT ALL ON SCHEMA public TO postgres;
 GRANT ALL ON SCHEMA public TO public;
 ALTER SCHEMA public OWNER to postgres;
-
--- CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
--- CREATE EXTENSION IF NOT EXISTS pg_stat_monitor;
--- GRANT ALL ON FUNCTION pg_stat_statements_reset(oid, oid, bigint) TO youruser;
-
--- Flush statistics
-SELECT pg_stat_statements_reset();
-
--- Top queries
-SELECT
-	userid::regrole, 
-	dbid, 
-	SUM(calls) AS total,
-	query
-FROM pg_stat_statements
-GROUP BY userid::regrole, dbid, query
-ORDER BY 3 DESC
-LIMIT 10;
-
--- Top CPU queries
-SELECT
-	userid::regrole,
-	dbid,
-	query
-FROM pg_stat_statements
-ORDER BY mean_time DESC
-LIMIT 10;
-
--- Top IO queries
-SELECT
-	userid::regrole, 
-	dbid, 
-	query
-FROM pg_stat_statements
-ORDER BY (blk_read_time+blk_write_time)/calls DESC
-LIMIT 10;
-
--- Top memory queries
-SELECT
-	userid::regrole, 
-	dbid, 
-	query
-FROM pg_stat_statements
-ORDER BY (shared_blks_hit+shared_blks_dirtied) DESC
-LIMIT 10;
